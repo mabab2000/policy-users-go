@@ -4,11 +4,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"database/sql"
 	"policy-users-go/app"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-contrib/cors"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"gorm.io/driver/postgres"
@@ -54,6 +56,16 @@ func main() {
 	}
 
 	r := gin.Default()
+
+	// enable CORS for all origins
+	r.Use(cors.New(cors.Config{
+		AllowAllOrigins:  true,
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	// API routes
 	api := r.Group("/api")
