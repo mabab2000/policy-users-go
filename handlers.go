@@ -200,7 +200,31 @@ func GetUser(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"user": user})
+		var rels []UsersProject
+		if err := db.Where("user_id = ?", uid).Find(&rels).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		projectsResp := make([]gin.H, 0, len(rels))
+		if len(rels) > 0 {
+			ids := make([]uuid.UUID, 0, len(rels))
+			for _, r := range rels {
+				ids = append(ids, r.ProjectID)
+			}
+
+			var projects []Project
+			if err := db.Where("id IN ?", ids).Find(&projects).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+
+			for _, p := range projects {
+				projectsResp = append(projectsResp, gin.H{"project_id": p.ID, "project_name": p.ProjectName, "organization": p.Organization})
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"user": user, "projects": projectsResp})
 	}
 }
 

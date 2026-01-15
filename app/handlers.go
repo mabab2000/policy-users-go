@@ -210,7 +210,37 @@ func GetUser(db *gorm.DB) gin.HandlerFunc {
 		}
 		DBMutex.Unlock()
 
-		c.JSON(http.StatusOK, gin.H{"user": user})
+		var rels []UsersProject
+		DBMutex.Lock()
+		if err := db.Where("user_id = ?", uid).Find(&rels).Error; err != nil {
+			DBMutex.Unlock()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		DBMutex.Unlock()
+
+		projectsResp := make([]gin.H, 0, len(rels))
+		if len(rels) > 0 {
+			ids := make([]uuid.UUID, 0, len(rels))
+			for _, r := range rels {
+				ids = append(ids, r.ProjectID)
+			}
+
+			var projects []Project
+			DBMutex.Lock()
+			if err := db.Where("id IN ?", ids).Find(&projects).Error; err != nil {
+				DBMutex.Unlock()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			DBMutex.Unlock()
+
+			for _, p := range projects {
+				projectsResp = append(projectsResp, gin.H{"project_id": p.ID, "project_name": p.ProjectName, "organization": p.Organization})
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"user": user, "projects": projectsResp})
 	}
 }
 
