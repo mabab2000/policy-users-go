@@ -165,7 +165,21 @@ func Login(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"token": "Bearer " + signed, "user_id": user.ID})
+		var rels []UsersProject
+		DBMutex.Lock()
+		if err := db.Where("user_id = ?", user.ID).Find(&rels).Error; err != nil {
+			DBMutex.Unlock()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		DBMutex.Unlock()
+
+		projectIDs := make([]uuid.UUID, 0, len(rels))
+		for _, r := range rels {
+			projectIDs = append(projectIDs, r.ProjectID)
+		}
+
+		c.JSON(http.StatusOK, gin.H{"token": "Bearer " + signed, "user_id": user.ID, "project_ids": projectIDs})
 	}
 }
 
