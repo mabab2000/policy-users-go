@@ -6,13 +6,11 @@ import (
 	"os"
 	"time"
 
-	"database/sql"
 	"policy-users-go/app"
 
-	"github.com/gin-gonic/gin"
 	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	_ "github.com/lib/pq"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -39,23 +37,17 @@ func main() {
 		}
 	}
 
-	// Open sql.DB using lib/pq to avoid pgx prepared-statement cache issues with poolers
-	var db *gorm.DB
-	sqlDB, err := sql.Open("postgres", dbURL)
+	// Open DB using pgx driver via gorm's postgres driver
+	db, err := gorm.Open(postgres.Open(dbURL), &gorm.Config{
+		PrepareStmt: false, // Disable prepared statements to avoid conflicts
+	})
 	if err != nil {
 		panic(err)
-	}
-	db, err = gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{})
-	if err != nil {
-		panic(err)
-	}
-
-	// Migrate tables: users, projects, users_project
-	if err := db.AutoMigrate(&app.User{}, &app.Project{}, &app.UsersProject{}); err != nil {
-		println("migration warning:", err.Error())
 	}
 
 	r := gin.Default()
+	// trust no proxies to silence gin warning and stay safe
+	_ = r.SetTrustedProxies(nil)
 
 	// enable CORS for all origins
 	r.Use(cors.New(cors.Config{
@@ -72,6 +64,9 @@ func main() {
 	{
 		api.POST("/users", app.CreateUser(db))
 		api.POST("/projects", app.CreateProject(db))
+		api.POST("/policies", app.CreatePolicy(db))
+		api.GET("/policies", app.ListPolicies(db))
+		api.GET("/policies/:id", app.GetPolicy(db))
 		api.POST("/login", app.Login(db))
 		api.GET("/users/:id", app.RequireAuthMatchingParam(), app.GetUser(db))
 		api.GET("/users/:id/projects", app.RequireAuthMatchingParam(), app.GetUserProjects(db))

@@ -1,0 +1,119 @@
+definitions:
+  app.Policy:
+    properties:
+      alignment_nst:
+        type: boolean
+      alignment_vision_2050:
+        type: boolean
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      objectives:
+        description: newline-separated
+        type: string
+      priority_level:
+        type: string
+      problem_statement:
+        type: string
+      responsible_ministry:
+        type: string
+      target_population:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /api/policies:
+    get:
+      consumes:
+      - application/json
+      description: Get list of policies filtered by title, code, priority_level, created_after,
+        created_before
+      parameters:
+      - description: Title contains
+        in: query
+        name: title
+        type: string
+      - description: Policy code
+        in: query
+        name: code
+        type: string
+      - description: Priority level
+        in: query
+        name: priority_level
+        type: string
+      - description: Created after (RFC3339)
+        in: query
+        name: created_after
+        type: string
+      - description: Created before (RFC3339)
+        in: query
+        name: created_before
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/app.Policy'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List policies
+      tags:
+      - policies
+  /api/policies/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed info for a policy by its ID
+      parameters:
+      - description: Policy ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/app.Policy'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get policy by ID
+      tags:
+      - policies
+swagger: "2.0"

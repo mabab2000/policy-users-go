@@ -8,6 +8,52 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  schemas:
+    Policy:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        problem_statement:
+          type: string
+        target_population:
+          type: string
+        objectives:
+          type: string
+          description: |-
+            Newline-separated objectives. Each objective should be on its own line.
+        alignment_vision_2050:
+          type: boolean
+        alignment_nst:
+          type: boolean
+        responsible_ministry:
+          type: string
+        priority_level:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PolicySummary:
+      type: object
+      properties:
+        title:
+          type: string
+        responsible_ministry:
+          type: string
+        priority_level:
+          type: string
+        created_at:
+          type: string
+          format: date-time
 security: []
 paths:
   /api/users:
@@ -74,6 +120,66 @@ paths:
       responses:
         '200':
           description: OK
+  /api/policies:
+    post:
+      summary: Create a new policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                problem_statement:
+                  type: string
+                target_population:
+                  type: string
+                objectives:
+                  type: string
+                  description: Newline-separated objectives
+                alignment_vision_2050:
+                  type: boolean
+                alignment_nst:
+                  type: boolean
+                responsible_ministry:
+                  type: string
+                priority_level:
+                  type: string
+              required: [title, description, problem_statement, target_population, objectives, alignment_vision_2050, alignment_nst]
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+    get:
+      summary: List policies
+      description: Get list of policies (title, responsible_ministry, priority_level, created_at)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PolicySummary'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
   /api/users/{id}:
     get:
       summary: Get user information by id
@@ -102,3 +208,27 @@ paths:
       responses:
         '200':
           description: OK
+  /api/policies/{id}:
+    get:
+      summary: Get policy by ID
+      description: Get detailed info for a policy by its ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Policy ID
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
+        '500':
+          description: Internal Server Error

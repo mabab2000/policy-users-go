@@ -45,3 +45,26 @@ type UsersProject struct {
 	UserID    uuid.UUID `gorm:"type:char(36);primaryKey" json:"user_id"`
 	ProjectID uuid.UUID `gorm:"type:char(36);primaryKey" json:"project_id"`
 }
+
+type Policy struct {
+	ID                   uuid.UUID `gorm:"type:char(36);primaryKey" json:"id"`
+	Title                string    `gorm:"size:255;not null" json:"title"`
+	Code                 string    `gorm:"size:32;uniqueIndex;not null" json:"code"`
+	Description          string    `gorm:"type:text;not null" json:"description"`
+	ProblemStatement     string    `gorm:"type:text;not null" json:"problem_statement"`
+	TargetPopulation     string    `gorm:"type:text;not null" json:"target_population"`
+	Objectives           string    `gorm:"type:text" json:"objectives"` // newline-separated
+	AlignmentVision2050  bool      `gorm:"column:alignment_vision_2050" json:"alignment_vision_2050"`
+	AlignmentNST         bool      `gorm:"column:alignment_nst" json:"alignment_nst"`
+	ResponsibleMinistry  string    `gorm:"size:255" json:"responsible_ministry"`
+	PriorityLevel        string    `gorm:"size:64" json:"priority_level"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
+}
+
+func (p *Policy) BeforeCreate(tx *gorm.DB) (err error) {
+	if p.ID == uuid.Nil {
+		p.ID = uuid.New()
+	}
+	return nil
+}
