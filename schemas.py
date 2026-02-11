@@ -13,7 +13,7 @@ class UserCreate(UserBase):
     password: str
 
 class UserResponse(UserBase):
-    id: uuid.UUID
+    id: str
     created_at: datetime
     updated_at: datetime
 
@@ -31,7 +31,7 @@ class ProjectCreate(ProjectBase):
     user_id: Optional[str] = None
 
 class ProjectResponse(ProjectBase):
-    id: uuid.UUID
+    id: str
     created_at: datetime
     updated_at: datetime
 
@@ -39,7 +39,7 @@ class ProjectResponse(ProjectBase):
         from_attributes = True
 
 class ProjectSummary(BaseModel):
-    project_id: uuid.UUID
+    project_id: str
     project_name: str
     organization: Optional[str] = None
 
@@ -59,7 +59,7 @@ class PolicyCreate(PolicyBase):
     pass
 
 class PolicyResponse(PolicyBase):
-    id: uuid.UUID
+    id: str
     code: str
     created_at: datetime
     updated_at: datetime
@@ -68,7 +68,7 @@ class PolicyResponse(PolicyBase):
         from_attributes = True
 
 class PolicySummary(BaseModel):
-    policy_id: uuid.UUID
+    policy_id: str
     title: str
     code: str
     responsible_ministry: Optional[str] = None
@@ -82,8 +82,8 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     token: str
-    user_id: uuid.UUID
-    project_ids: List[uuid.UUID]
+    user_id: str
+    project_ids: List[str]
 
 # User with projects response
 class UserWithProjects(UserResponse):

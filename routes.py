@@ -181,7 +181,24 @@ def get_policy(id: str, db: Session = Depends(get_db)):
             detail="Policy not found"
         )
     
-    return {"policy": policy}
+    # Convert SQLAlchemy model to dict for serialization, ensure UUIDs are strings
+    policy_data = {
+        "id": str(policy.id),
+        "title": policy.title,
+        "code": policy.code,
+        "description": policy.description,
+        "problem_statement": policy.problem_statement,
+        "target_population": policy.target_population,
+        "objectives": policy.objectives,
+        "alignment_vision_2050": policy.alignment_vision_2050,
+        "alignment_nst": policy.alignment_nst,
+        "responsible_ministry": policy.responsible_ministry,
+        "priority_level": policy.priority_level,
+        "created_at": policy.created_at,
+        "updated_at": policy.updated_at,
+    }
+
+    return {"policy": PolicyResponse.model_validate(policy_data).model_dump()}
 
 @router.post("/login", response_model=LoginResponse)
 def login(login_data: LoginRequest, db: Session = Depends(get_db)):
@@ -249,7 +266,8 @@ def get_user(id: str, db: Session = Depends(get_db), _: str = Depends(require_au
             organization=row[2]
         ))
     
-    return {"user": user, "projects": projects}
+    # Convert SQLAlchemy model to dict for serialization
+    return {"user": UserResponse.model_validate(user).model_dump(), "projects": projects}
 
 @router.get("/users/{id}/projects", response_model=dict)
 def get_user_projects(id: str, db: Session = Depends(get_db), _: str = Depends(require_auth_matching_param)):
