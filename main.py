@@ -29,11 +29,7 @@ app.add_middleware(
 # Include API routes
 app.include_router(router, prefix="/api")
 
-# Serve OpenAPI YAML and Swagger UI
-@app.get("/swagger.yaml")
-async def get_openapi_yaml():
-    return FileResponse("docs/openapi.yaml")
-
+# Serve Swagger UI
 @app.get("/swagger")
 async def get_swagger():
     return FileResponse("templates/swagger.html")

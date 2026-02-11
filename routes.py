@@ -270,7 +270,7 @@ def get_user(id: str, db: Session = Depends(get_db), _: str = Depends(require_au
     return {"user": UserResponse.model_validate(user).model_dump(), "projects": projects}
 
 @router.get("/users/{id}/projects", response_model=dict)
-def get_user_projects(id: str, db: Session = Depends(get_db), _: str = Depends(require_auth_matching_param)):
+def get_user_projects(id: str, db: Session = Depends(get_db)):
     try:
         user_uuid = uuid.UUID(id)
     except ValueError:
