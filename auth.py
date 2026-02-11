@@ -25,6 +25,21 @@ try:
         _about = _About()
         _about.__version__ = ver
         _bcrypt.__about__ = _about
+    
+    # Monkey-patch bcrypt.hashpw to auto-truncate passwords to 72 bytes
+    # This prevents ValueError during passlib's backend initialization
+    _original_hashpw = _bcrypt.hashpw
+    
+    def _safe_hashpw(password, salt):
+        """Wrapper that truncates password to 72 bytes before hashing"""
+        if isinstance(password, str):
+            password = password.encode("utf-8")
+        if len(password) > 72:
+            password = password[:72]
+        return _original_hashpw(password, salt)
+    
+    _bcrypt.hashpw = _safe_hashpw
+    
 except Exception:
     pass  # Let passlib handle missing bcrypt
 
