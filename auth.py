@@ -7,7 +7,26 @@ from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use bcrypt_sha256 first to support passwords longer than bcrypt's 72-byte limit
+pwd_context = CryptContext(schemes=["bcrypt_sha256", "bcrypt"], deprecated="auto")
+
+# bcrypt has a 72-byte password limit. Truncate UTF-8 strings safely to that limit
+TRUNCATE_LIMIT = 72
+
+def _truncate_password(password: str) -> str:
+    """Return a UTF-8-safe truncation of `password` so its encoded length <= 72 bytes.
+    This preserves character boundaries and avoids splitting multi-byte characters.
+    """
+    b = password.encode("utf-8")
+    if len(b) <= TRUNCATE_LIMIT:
+        return password
+    out = bytearray()
+    for ch in password:
+        chb = ch.encode("utf-8")
+        if len(out) + len(chb) > TRUNCATE_LIMIT:
+            break
+        out.extend(chb)
+    return out.decode("utf-8", errors="ignore")
 
 # JWT settings
 SECRET_KEY = os.getenv("JWT_SECRET", "secret")
@@ -17,10 +36,14 @@ ACCESS_TOKEN_EXPIRE_HOURS = 24
 security = HTTPBearer()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    # Truncate input to bcrypt limit to avoid ValueError from passlib/bcrypt
+    safe = _truncate_password(plain_password)
+    return pwd_context.verify(safe, hashed_password)
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    # Truncate before hashing so stored hashes match verification behavior
+    safe = _truncate_password(password)
+    return pwd_context.hash(safe)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()

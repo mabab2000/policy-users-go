@@ -18,7 +18,7 @@ from auth import get_password_hash, verify_password, create_access_token, requir
 
 router = APIRouter()
 
-@router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/users", response_model=dict, status_code=status.HTTP_201_CREATED)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
     # Hash the password
     hashed_password = get_password_hash(user.password)
@@ -32,6 +32,11 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     )
     
     try:
+        # set timestamps so response includes them immediately
+        now = datetime.utcnow()
+        db_user.created_at = now
+        db_user.updated_at = now
+
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
@@ -41,8 +46,14 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
+    except Exception as e:
+        db.rollback()
+        # return error details for debugging
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     
-    return db_user
+    # Convert SQLAlchemy model to Pydantic for JSON serialization
+    user_out = UserResponse.model_validate(db_user)
+    return {"message": "user created", "user": user_out}
 
 @router.post("/projects", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
@@ -67,9 +78,11 @@ def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Invalid user_id"
                 )
-            
+
+            user_id_str = str(user_uuid)
+
             # Ensure user exists
-            user = db.query(User).filter(User.id == user_uuid).first()
+            user = db.query(User).filter(User.id == user_id_str).first()
             if not user:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -79,7 +92,7 @@ def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
             # Create relationship
             db.execute(
                 users_projects.insert().values(
-                    user_id=user_uuid,
+                    user_id=user_id_str,
                     project_id=db_project.id
                 )
             )
@@ -160,8 +173,8 @@ def get_policy(id: str, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid policy id"
         )
-    
-    policy = db.query(Policy).filter(Policy.id == policy_uuid).first()
+
+    policy = db.query(Policy).filter(Policy.id == str(policy_uuid)).first()
     if not policy:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -212,8 +225,8 @@ def get_user(id: str, db: Session = Depends(get_db), _: str = Depends(require_au
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid user id"
         )
-    
-    user = db.query(User).filter(User.id == user_uuid).first()
+
+    user = db.query(User).filter(User.id == str(user_uuid)).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -247,14 +260,16 @@ def get_user_projects(id: str, db: Session = Depends(get_db), _: str = Depends(r
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid user id"
         )
-    
+
+    user_id_str = str(user_uuid)
+
     # Get user's projects
     result = db.execute(text("""
         SELECT p.id, p.project_name, p.organization, p.description, p.scorp, p.created_at, p.updated_at
         FROM projects p
         JOIN users_projects up ON p.id = up.project_id
         WHERE up.user_id = :user_id
-    """), {"user_id": user_uuid})
+    """), {"user_id": user_id_str})
     
     projects = []
     for row in result:
