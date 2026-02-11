@@ -154,7 +154,7 @@ def list_policies(db: Session = Depends(get_db)):
     policies = []
     for row in result:
         policies.append(PolicySummary(
-            policy_id=row[0],
+            policy_id=str(row[0]),
             title=row[1],
             code=row[2],
             responsible_ministry=row[3],
