@@ -22,8 +22,8 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     phone = Column(String(64))
     password = Column(String(255), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Many-to-many relationship with projects
     projects = relationship("Project", secondary=users_projects, back_populates="users")
@@ -36,8 +36,8 @@ class Project(Base):
     organization = Column(String(255))
     description = Column(Text)
     scorp = Column(String(255))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Many-to-many relationship with users
     users = relationship("User", secondary=users_projects, back_populates="projects")
@@ -56,5 +56,5 @@ class Policy(Base):
     alignment_nst = Column(Boolean, default=False)
     responsible_ministry = Column(String(255))
     priority_level = Column(String(64))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)

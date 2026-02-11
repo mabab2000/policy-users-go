@@ -6,9 +6,41 @@ from passlib.context import CryptContext
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+# Ensure the `bcrypt` module exposes a `__about__.__version__` attribute
+# which some passlib versions expect; if missing, synthesize it to avoid
+# AttributeError tracebacks during backend detection.
+try:
+    import bcrypt as _bcrypt
+    if not hasattr(_bcrypt, "__about__"):
+        class _About:
+            pass
+        ver = getattr(_bcrypt, "__version__", None)
+        if ver is None:
+            # some bcrypt builds expose version via pkg_resources or not at all
+            try:
+                import importlib.metadata as _im
+                ver = _im.version("bcrypt")
+            except Exception:
+                ver = "0"
+        _about = _About()
+        _about.__version__ = ver
+        _bcrypt.__about__ = _about
+except Exception:
+    # If bcrypt isn't available or something fails, let passlib fall back
+    # and we'll still handle errors elsewhere.
+    pass
+
 # Password hashing
 # Use bcrypt_sha256 first to support passwords longer than bcrypt's 72-byte limit
-pwd_context = CryptContext(schemes=["bcrypt_sha256", "bcrypt"], deprecated="auto")
+# Set backend explicitly to avoid version detection issues
+import warnings
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    pwd_context = CryptContext(
+        schemes=["bcrypt_sha256", "bcrypt"], 
+        deprecated="auto",
+        bcrypt__default_rounds=12,  # Explicitly set rounds to avoid auto-detection
+    )
 
 # bcrypt has a 72-byte password limit. Truncate UTF-8 strings safely to that limit
 TRUNCATE_LIMIT = 72
