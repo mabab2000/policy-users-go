@@ -1,22 +1,22 @@
 from datetime import datetime, timedelta
 from typing import Optional
 import os
+import warnings
+
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-# Ensure the `bcrypt` module exposes a `__about__.__version__` attribute
-# which some passlib versions expect; if missing, synthesize it to avoid
-# AttributeError tracebacks during backend detection.
+# -------------------------------
+# Bcrypt version fix for passlib
+# -------------------------------
 try:
     import bcrypt as _bcrypt
     if not hasattr(_bcrypt, "__about__"):
-        class _About:
-            pass
+        class _About: pass
         ver = getattr(_bcrypt, "__version__", None)
         if ver is None:
-            # some bcrypt builds expose version via pkg_resources or not at all
             try:
                 import importlib.metadata as _im
                 ver = _im.version("bcrypt")
@@ -26,29 +26,15 @@ try:
         _about.__version__ = ver
         _bcrypt.__about__ = _about
 except Exception:
-    # If bcrypt isn't available or something fails, let passlib fall back
-    # and we'll still handle errors elsewhere.
-    pass
+    pass  # Let passlib handle missing bcrypt
 
-# Password hashing
-# Use bcrypt_sha256 first to support passwords longer than bcrypt's 72-byte limit
-# Set backend explicitly to avoid version detection issues
-import warnings
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-    pwd_context = CryptContext(
-        schemes=["bcrypt_sha256", "bcrypt"], 
-        deprecated="auto",
-        bcrypt__default_rounds=12,  # Explicitly set rounds to avoid auto-detection
-    )
-
-# bcrypt has a 72-byte password limit. Truncate UTF-8 strings safely to that limit
-TRUNCATE_LIMIT = 72
+# -------------------------------
+# Password hashing (bcrypt_sha256 to bypass 72-byte limit)
+# -------------------------------
+TRUNCATE_LIMIT = 72  # bytes
 
 def _truncate_password(password: str) -> str:
-    """Return a UTF-8-safe truncation of `password` so its encoded length <= 72 bytes.
-    This preserves character boundaries and avoids splitting multi-byte characters.
-    """
+    """Truncate UTF-8 password safely to <= 72 bytes for bcrypt"""
     b = password.encode("utf-8")
     if len(b) <= TRUNCATE_LIMIT:
         return password
@@ -60,36 +46,39 @@ def _truncate_password(password: str) -> str:
         out.extend(chb)
     return out.decode("utf-8", errors="ignore")
 
-# JWT settings
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    pwd_context = CryptContext(
+        schemes=["bcrypt_sha256", "bcrypt"],  # support old and new users
+        deprecated="auto",
+        bcrypt__default_rounds=12,           # secure rounds
+    )
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    safe = _truncate_password(plain_password)
+    return pwd_context.verify(safe, hashed_password)
+
+def get_password_hash(password: str) -> str:
+    safe = _truncate_password(password)
+    return pwd_context.hash(safe)
+
+# -------------------------------
+# JWT Settings
+# -------------------------------
 SECRET_KEY = os.getenv("JWT_SECRET", "secret")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
 security = HTTPBearer()
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    # Truncate input to bcrypt limit to avoid ValueError from passlib/bcrypt
-    safe = _truncate_password(plain_password)
-    return pwd_context.verify(safe, hashed_password)
-
-def get_password_hash(password: str) -> str:
-    # Truncate before hashing so stored hashes match verification behavior
-    safe = _truncate_password(password)
-    return pwd_context.hash(safe)
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
-    
+    expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
     to_encode.update({
         "exp": expire,
         "iat": datetime.utcnow()
     })
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
     token = credentials.credentials
@@ -97,23 +86,14 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
         if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token claims"
-            )
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims")
         return user_id
     except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 def require_auth_matching_param(id: str, credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
     """Validates that the token subject matches the path parameter user ID"""
     user_id = verify_token(credentials)
     if user_id != id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     return user_id
