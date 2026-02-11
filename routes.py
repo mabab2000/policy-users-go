@@ -256,7 +256,7 @@ def get_user(id: str, db: Session = Depends(get_db), _: str = Depends(require_au
         FROM projects p
         JOIN users_projects up ON p.id = up.project_id
         WHERE up.user_id = :user_id
-    """), {"user_id": user_uuid})
+    """), {"user_id": str(user_uuid)})
     
     projects = []
     for row in result:
