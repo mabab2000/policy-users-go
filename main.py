@@ -7,8 +7,7 @@ from routes import router
 from database import engine
 from models import Base
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+app_import_safe = True
 
 # Create FastAPI app
 app = FastAPI(
@@ -28,6 +27,16 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(router, prefix="/api")
+
+
+# Create database tables on startup but don't crash the app if DB is unreachable
+@app.on_event("startup")
+def on_startup():
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        import logging
+        logging.warning(f"Could not create database tables on startup: {e}")
 
 # Serve Swagger UI
 @app.get("/swagger")

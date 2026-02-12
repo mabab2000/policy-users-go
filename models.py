@@ -58,3 +58,20 @@ class Policy(Base):
     priority_level = Column(String(64))
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class Implementation(Base):
+    __tablename__ = "implementations"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    policy_id = Column(String(36), ForeignKey('policies.id'), nullable=True, index=True)
+    type = Column(String(128), nullable=True)
+    program_name = Column(String(255), nullable=False)
+    description = Column(Text)
+    status = Column(String(64))
+    budget = Column(String(128))
+    timeline = Column(String(255))
+    lead = Column(String(255))
+    progress = Column(String(255))
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)

@@ -88,3 +88,33 @@ class LoginResponse(BaseModel):
 # User with projects response
 class UserWithProjects(UserResponse):
     projects: List[ProjectSummary]
+
+
+# Implementation schemas
+class ImplementationBase(BaseModel):
+    program_name: str
+    description: Optional[str] = None
+    status: Optional[str] = None
+    budget: Optional[str] = None
+    timeline: Optional[str] = None
+    lead: Optional[str] = None
+    progress: Optional[str] = None
+    policy_id: Optional[str] = None
+    type: Optional[str] = None
+
+class ImplementationCreate(ImplementationBase):
+    pass
+
+class ImplementationResponse(ImplementationBase):
+    id: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ImplementationSummary(BaseModel):
+    id: str
+    program_name: str
+    status: Optional[str] = None
+    progress: Optional[str] = None

@@ -4,15 +4,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
 from typing import List
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
-from database import get_db
-from models import User, Project, Policy, users_projects
+from database import get_db, engine
+from models import User, Project, Policy, users_projects, Implementation
 from schemas import (
     UserCreate, UserResponse, UserWithProjects, ProjectSummary,
     ProjectCreate, ProjectResponse,
     PolicyCreate, PolicyResponse, PolicySummary,
-    LoginRequest, LoginResponse
+    LoginRequest, LoginResponse,
+    ImplementationCreate, ImplementationResponse, ImplementationSummary
 )
 from auth import get_password_hash, verify_password, create_access_token, require_auth_matching_param
 
@@ -32,8 +33,8 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     )
     
     try:
-        # set timestamps so response includes them immediately
-        now = datetime.utcnow()
+        # set timestamps so response includes them immediately (timezone-aware)
+        now = datetime.now(timezone.utc)
         db_user.created_at = now
         db_user.updated_at = now
 
@@ -302,3 +303,183 @@ def get_user_projects(id: str, db: Session = Depends(get_db)):
         ))
     
     return {"projects": projects}
+
+
+
+@router.post("/implementations", response_model=ImplementationResponse, status_code=status.HTTP_201_CREATED)
+def create_implementation(implementation: ImplementationCreate, db: Session = Depends(get_db)):
+    # Validate optional policy_id if provided
+    if implementation.policy_id:
+        try:
+            policy_uuid = uuid.UUID(implementation.policy_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid policy_id")
+
+        # Ensure policy exists
+        policy = db.query(Policy).filter(Policy.id == str(policy_uuid)).first()
+        if not policy:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Policy not found")
+
+    db_impl = Implementation(
+        policy_id=str(implementation.policy_id) if implementation.policy_id else None,
+        type=implementation.type,
+        program_name=implementation.program_name,
+        description=implementation.description,
+        status=implementation.status,
+        budget=implementation.budget,
+        timeline=implementation.timeline,
+        lead=implementation.lead,
+        progress=implementation.progress
+    )
+
+    try:
+        now = datetime.now(timezone.utc)
+        db_impl.created_at = now
+        db_impl.updated_at = now
+        db.add(db_impl)
+        db.commit()
+        db.refresh(db_impl)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+    # Convert potential UUID objects to strings for response validation
+    response_data = {
+        "id": str(db_impl.id),
+        "policy_id": str(db_impl.policy_id) if db_impl.policy_id else None,
+        "type": db_impl.type,
+        "program_name": db_impl.program_name,
+        "description": db_impl.description,
+        "status": db_impl.status,
+        "budget": db_impl.budget,
+        "timeline": db_impl.timeline,
+        "lead": db_impl.lead,
+        "progress": db_impl.progress,
+        "created_at": db_impl.created_at,
+        "updated_at": db_impl.updated_at,
+    }
+
+    return ImplementationResponse.model_validate(response_data)
+
+
+@router.get("/implementations/policy/{policy_id}", response_model=dict)
+def get_implementations_by_policy(policy_id: str, db: Session = Depends(get_db)):
+    try:
+        policy_uuid = uuid.UUID(policy_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid policy_id")
+
+    impls = db.query(Implementation).filter(Implementation.policy_id == str(policy_uuid)).all()
+
+    implementations = []
+    for impl in impls:
+        impl_data = {
+            "id": str(impl.id),
+            "policy_id": str(impl.policy_id) if impl.policy_id else None,
+            "type": impl.type,
+            "program_name": impl.program_name,
+            "description": impl.description,
+            "status": impl.status,
+            "budget": impl.budget,
+            "timeline": impl.timeline,
+            "lead": impl.lead,
+            "progress": impl.progress,
+            "created_at": impl.created_at,
+            "updated_at": impl.updated_at,
+        }
+        implementations.append(ImplementationResponse.model_validate(impl_data).model_dump())
+
+    return {"implementations": implementations}
+
+
+@router.get("/implementations/policy/{policy_id}/summary", response_model=dict)
+def get_implementations_summary_by_policy(policy_id: str, db: Session = Depends(get_db)):
+    try:
+        policy_uuid = uuid.UUID(policy_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid policy_id")
+
+    impls = db.query(Implementation).filter(Implementation.policy_id == str(policy_uuid)).all()
+
+    # Helper parsers
+    def parse_budget(bstr: str):
+        if not bstr:
+            return 0
+        # remove non-digits
+        digits = ''.join(ch for ch in bstr if ch.isdigit())
+        try:
+            return int(digits) if digits else 0
+        except ValueError:
+            return 0
+
+    def parse_progress(pstr: str):
+        if not pstr:
+            return None
+        digits = ''.join(ch for ch in pstr if (ch.isdigit() or ch == '.'))
+        try:
+            return float(digits)
+        except ValueError:
+            return None
+
+    # Group implementations by `type` and compute aggregates per type
+    now = datetime.now(timezone.utc)
+    month_ago = now - timedelta(days=30)
+
+    groups: dict[str, list[Implementation]] = {}
+    for impl in impls:
+        key = (impl.type or "unknown").lower()
+        groups.setdefault(key, []).append(impl)
+
+    def format_rwf(n: int):
+        return f"RWF {n:,}" if n is not None else "RWF 0"
+
+    summary_by_type = {}
+
+    for typ, items in groups.items():
+        total = len(items)
+        active_count = 0
+        delayed_count = 0
+        on_track_count = 0
+        new_this_month = 0
+        total_budget = 0
+        spent_total = 0.0
+        progress_values: list[float] = []
+
+        for impl in items:
+            status_val = (impl.status or "").lower()
+            if 'active' in status_val:
+                active_count += 1
+            if 'delay' in status_val or 'delayed' in status_val:
+                delayed_count += 1
+
+            prog = parse_progress(impl.progress)
+            if prog is not None:
+                progress_values.append(prog)
+
+            budget_val = parse_budget(impl.budget)
+            total_budget += budget_val
+            if prog is not None:
+                spent_total += (budget_val * (prog / 100.0))
+
+            if 'on track' in status_val or (prog is not None and prog >= 50):
+                on_track_count += 1
+
+            if impl.created_at and impl.created_at >= month_ago:
+                new_this_month += 1
+
+        avg_progress = None
+        if progress_values:
+            avg_progress = sum(progress_values) / len(progress_values)
+
+        summary_by_type[typ] = {
+            "active_programs": active_count,
+            "new_this_month": new_this_month,
+            "total_projects": total,
+            "delayed": delayed_count,
+            "total_budget": format_rwf(int(total_budget)),
+            "spent": format_rwf(int(spent_total)),
+            "avg_progress": f"{round(avg_progress, 1)}%" if avg_progress is not None else None,
+            "on_track": on_track_count,
+        }
+
+    return {"summary_by_type": summary_by_type}
